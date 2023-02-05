@@ -14,11 +14,15 @@ from platform import system as current_system
 from subprocess import Popen, call
 from time import sleep
 
+
 # =============================================================================
 # Parameters
 # =============================================================================
-surface_export_types = ["Surface", "Cartoon", "Sticks", "Mesh", "Lines",
-                        "Ribbon", "Wire", "Licorice", "Dots", "Spheres"]
+surface_types = ["Surface", "Cartoon",
+                 "Sticks", "Mesh",
+                 "Lines", "Ribbon",
+                 "Wire", "Licorice",
+                 "Dots", "Spheres"]
 
 # =============================================================================
 # PyMOL start-up
@@ -39,17 +43,20 @@ def run_plugin_gui():
     dialog.show()
 
 # =============================================================================
-# Exporting functions Thread:
+# Exporting function:
 # =============================================================================
-class Exporting_Thread(QtCore.QThread):
-    progress_bar_updating = QtCore.pyqtSignal(dict)
+class ExportingThread(QtCore.QThread):
+    prog_update = QtCore.pyqtSignal(dict)
 
-    def __init__(self, directory_output_location, export_type, output_obj_list, progress_bar_obj, progress_label):
+    def __init__(
+            self, dir_out, export_type, output_obj_list, prog_bar_obj,
+            progress_label):
+
         QtCore.QThread.__init__(self, None)
-        self.directory_output_location = directory_output_location
+        self.dir_out = dir_out
         self.export_type = export_type
         self.output_obj_list = output_obj_list
-        self.progress_bar_obj = progress_bar_obj
+        self.progress_bar_obj = prog_bar_obj
         self.progress_label = progress_label
 
     def run(self):
@@ -60,24 +67,27 @@ class Exporting_Thread(QtCore.QThread):
         print('==============================================')
 
         # Show each object as determined by the user.
-        for object_no in range(len(self.output_obj_list)):
+        for obj_no in range(len(self.output_obj_list)):
             cmd.disable('all')
-            object_name = self.output_obj_list[object_no].text()
-            print(f"    -{object_name}")
-            # Send over the data to the progress bar to reflect the current state
-            self.progress_bar_updating.emit({"Job_Number": object_no,
-                                             "Total_jobs": len(self.output_obj_list),
-                                             "Object_name": object_name})
-            cmd.show_as(self.export_type.lower(), object_name)
-            cmd.enable(object_name)
-            name_for_output = path.join(self.directory_output_location, f"{object_name}.wrl")
-            cmd.save(name_for_output, ['wrl'])
-            self.output_obj_list[object_no].setStyleSheet("background-color: green")
+            obj_name = self.output_obj_list[obj_no].text()
+            print(f"    -{obj_name}")
+            # Send over the data to the progress bar to reflect updates
+            self.prog_update.emit({"Job_Number": obj_no+1,
+                                   "Total_jobs": len(self.output_obj_list),
+                                   "Object_name": obj_name})
+
+            cmd.show_as(self.export_type.lower(), obj_name)
+            cmd.enable(obj_name)
+            output_name = path.join(self.dir_out, f"{obj_name}.wrl")
+            cmd.save(output_name, ['wrl'])
+            self.output_obj_list[obj_no].setStyleSheet(
+                "background-color: green")
+
         print(' ')
-        self.progress_bar_updating.emit({"Job_Number": len(self.output_obj_list),
-                                         "Total_jobs": len(self.output_obj_list),
-                                         "Object_name": None,
-                                         "Last_file": name_for_output})
+        self.prog_update.emit({"Job_Number": len(self.output_obj_list),
+                               "Total_jobs": len(self.output_obj_list),
+                               "Object_name": None,
+                               "Last_file": output_name})
 
         print('==============================================')
         cmd.disable('all')
@@ -85,46 +95,52 @@ class Exporting_Thread(QtCore.QThread):
         print('==============================================')
 
 # =============================================================================
-# GUI elements:
+# GUI element:
 # =============================================================================
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         uifile = path.join(path.dirname(__file__), 'Main_menu.ui')
-        self.user_interface = loadUi(uifile, dialog)
+        self.ui_obj = loadUi(uifile, dialog)
         self.scroll_widget_area = QtWidgets.QWidget()
         self.v_layout = QtWidgets.QVBoxLayout()
         self.scroll_widget_area.setLayout(self.v_layout)
-        self.user_interface.scrollArea.setWidget(self.scroll_widget_area)
+        self.ui_obj.scrollArea.setWidget(self.scroll_widget_area)
 
         self.individual_obj_checkboxes = []
         self.connect_interface_buttons()
-        self.populate_individual_objects()
+        self.populate_obj_action()
 
     def connect_interface_buttons(self):
-        self.user_interface.refresh_button.clicked.connect(self.populate_individual_objects)
-        self.user_interface.select_all.clicked.connect(lambda: self.all_selection(select_all=True))
-        self.user_interface.select_none.clicked.connect(lambda: self.all_selection(select_all=False))
-        self.user_interface.browse_button.clicked.connect(lambda: self.browse_button_function(self.user_interface.output_directory))
-        self.user_interface.Submit_button.clicked.connect(self.submit_button_function)
-        self.user_interface.Cancel_button.clicked.connect(self.close_button_function)
-        self.populate_export_types(self.user_interface.export_type)
+        self.ui_obj.refresh_button.clicked.connect(
+            self.populate_obj_action)
 
-    # ==========================================================
-    # Return the dialog for handling in PyMOL
-    # ==========================================================
+        self.ui_obj.select_all.clicked.connect(
+            lambda: self.select_all_action(select_opt=True))
+
+        self.ui_obj.select_none.clicked.connect(
+            lambda: self.select_all_action(select_opt=False))
+
+        self.ui_obj.browse_button.clicked.connect(
+            lambda: self.browse_button_action(self.ui_obj.output_directory))
+
+        self.ui_obj.Submit_button.clicked.connect(self.submit_button_action)
+        self.ui_obj.Cancel_button.clicked.connect(self.close_button_action)
+        self.populate_exports_action(self.ui_obj.export_type)
+
     def return_dialog(self):
-        return self.user_interface
+        # Just returns the dialog for handling in PyMOL
+        return self.ui_obj
 
-    def populate_export_types(self, dropdown_box_to_update):
-        for each_surface in surface_export_types:
+    def populate_exports_action(self, dropdown_box_to_update):
+        for each_surface in surface_types:
             dropdown_box_to_update.addItem(each_surface)
 
-    def all_selection(self, select_opt):
+    def select_all_action(self, select_opt):
         for each_checkbox in self.individual_obj_checkboxes:
             each_checkbox.setChecked(select_opt)
 
-    def populate_individual_objects(self):
+    def populate_obj_action(self):
         # Destroy previous list but maintain reference
         for i in range(len(self.individual_obj_checkboxes)):
             self.individual_obj_checkboxes[0].deleteLater()
@@ -138,8 +154,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.v_layout.addWidget(new_checkbox)
             self.individual_obj_checkboxes.append(new_checkbox)
 
-    def submit_button_function(self):
-        if self.user_interface.output_directory.text() != "":
+    def submit_button_action(self):
+        if self.ui_obj.output_directory.text() != "":
             obj_for_export = []
             for each_checkbox in self.individual_obj_checkboxes:
                 if each_checkbox.isChecked():
@@ -152,49 +168,55 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 print(' ')
                 print('==============================================')
-                print(f"{len(obj_for_export)} objects selected, exporting all to {self.user_interface.output_directory.text()}")
+                print(f"{len(obj_for_export)} objects selected, exporting all to {self.ui_obj.output_directory.text()}")
                 print('==============================================')
-            self.exporting_thread = Exporting_Thread(self.user_interface.output_directory.text(),
-                                                     self.user_interface.export_type.currentText(),
-                                                     obj_for_export,
-                                                     self.user_interface.progress_bar,
-                                                     self.user_interface.progess_text)
-            self.exporting_thread.progress_bar_updating.connect(self.update_progress)
+            self.exporting_thread = ExportingThread(
+                self.ui_obj.output_directory.text(),
+                self.ui_obj.export_type.currentText(),
+                obj_for_export,
+                self.ui_obj.progress_bar,
+                self.ui_obj.progess_text)
+
+            self.exporting_thread.prog_update.connect(self.update_progress)
             self.exporting_thread.start()
         else:
-            self.user_interface.output_directory.setStyleSheet("background: red;")
+            self.ui_obj.output_directory.setStyleSheet("background: red;")
 
     def update_progress(self, recieved_dict):
-        self.user_interface.progress_bar.setValue(int((recieved_dict["Job_Number"]/recieved_dict["Total_jobs"])*100))
+        self.ui_obj.progress_bar.setValue(
+            int((recieved_dict["Job_Number"]/recieved_dict["Total_jobs"])*100))
+
         if recieved_dict["Object_name"] is not None:
-            self.user_interface.progess_text.setText(f"Exporting job {recieved_dict['Job_Number']} of {recieved_dict['Total_jobs']}: {recieved_dict['Object_name']}")
+            self.ui_obj.progess_text.setText(f"Exporting job {recieved_dict['Job_Number']} of {recieved_dict['Total_jobs']}: {recieved_dict['Object_name']}")
         else:
-            self.user_interface.progess_text.setText("Complete!")
+            self.ui_obj.progess_text.setText("Complete!")
             # Open the directory we've just written the files to
             self.open_file_in_explorer(recieved_dict["Last_file"])
 
             # After X seconds close the dialog.
             countdown = 3
             for i in range(countdown, 0, -1):
-                self.user_interface.progess_text.setText(f"Closing dialog in {i-1}")
+                self.ui_obj.progess_text.setText(f"Closing dialog in {i-1}")
                 QtWidgets.QApplication.processEvents()
                 sleep(1)
-            self.close_button_function()
+            self.close_button_action()
 
-    def browse_button_function(self, textbox_for_updating):
-        textbox_for_updating.setStyleSheet("background: None;")
+    def browse_button_action(self, textbox_to_update):
+        textbox_to_update.setStyleSheet("background: None;")
         # Get the directory location
         option = QtWidgets.QFileDialog.ShowDirsOnly
         option |= QtWidgets.QFileDialog.DontUseNativeDialog
-        filename = str(QtWidgets.QFileDialog.getExistingDirectory(dialog, "Select Directory for output", options=option))
-        if filename:
-            textbox_for_updating.setText(filename)
+        filename = str(QtWidgets.QFileDialog.getExistingDirectory(
+            dialog, "Select Directory for output", options=option))
 
-    def close_button_function(self):
+        if filename:
+            textbox_to_update.setText(filename)
+
+    def close_button_action(self):
         # Need to clear up the interface once a job is complete.
-        self.user_interface.output_directory.setText("")
-        self.user_interface.progress_bar.setValue(0)
-        self.user_interface.progess_text.setText("")
+        self.ui_obj.output_directory.setText("")
+        self.ui_obj.progress_bar.setValue(0)
+        self.ui_obj.progess_text.setText("")
         for i in range(len(self.individual_obj_checkboxes)):
             self.individual_obj_checkboxes[0].deleteLater()
             del self.individual_obj_checkboxes[0]
