@@ -27,19 +27,20 @@ surface_types = ["Surface", "Cartoon",
 # =============================================================================
 # PyMOL start-up
 # =============================================================================
+# Standard function for adding pymol plugin
 def __init_plugin__(app=None):
     from pymol.plugins import addmenuitemqt
-    addmenuitemqt("Multisubunit exporter", run_plugin_gui)
+    addmenuitemqt("Multisubunit exporter", runPluginGUI)
 
 
 dialog = None
 
 
-def run_plugin_gui():
+def runPluginGUI():
     global dialog
     if dialog is None:
         main_app = MainWindow()
-        dialog = main_app.return_dialog()
+        dialog = main_app.returnDialog()
     dialog.show()
 
 # =============================================================================
@@ -108,39 +109,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui_obj.scrollArea.setWidget(self.scroll_widget_area)
 
         self.individual_obj_checkboxes = []
-        self.connect_interface_buttons()
-        self.populate_obj_action()
+        self.connectInterfaceButtons()
+        self.populateObjAction()
 
-    def connect_interface_buttons(self):
+    def connectInterfaceButtons(self):
         self.ui_obj.refresh_button.clicked.connect(
-            self.populate_obj_action)
+            self.populateObjAction)
 
         self.ui_obj.select_all.clicked.connect(
-            lambda: self.select_all_action(select_opt=True))
+            lambda: self.selectAllAction(select_opt=True))
 
         self.ui_obj.select_none.clicked.connect(
-            lambda: self.select_all_action(select_opt=False))
+            lambda: self.selectAllAction(select_opt=False))
 
         self.ui_obj.browse_button.clicked.connect(
-            lambda: self.browse_button_action(self.ui_obj.output_directory))
+            lambda: self.browseButtonAction(self.ui_obj.output_directory))
 
-        self.ui_obj.Submit_button.clicked.connect(self.submit_button_action)
-        self.ui_obj.Cancel_button.clicked.connect(self.close_button_action)
-        self.populate_exports_action(self.ui_obj.export_type)
+        self.ui_obj.Submit_button.clicked.connect(self.submitButtonAction)
+        self.ui_obj.Cancel_button.clicked.connect(self.closeButtonAction)
+        self.populateExportsAction(self.ui_obj.export_type)
 
-    def return_dialog(self):
+    def returnDialog(self):
         # Just returns the dialog for handling in PyMOL
         return self.ui_obj
 
-    def populate_exports_action(self, dropdown_box_to_update):
+    def populateExportsAction(self, dropdown_box_to_update):
         for each_surface in surface_types:
             dropdown_box_to_update.addItem(each_surface)
 
-    def select_all_action(self, select_opt):
+    def selectAllAction(self, select_opt):
         for each_checkbox in self.individual_obj_checkboxes:
             each_checkbox.setChecked(select_opt)
 
-    def populate_obj_action(self):
+    def populateObjAction(self):
         # Destroy previous list but maintain reference
         for i in range(len(self.individual_obj_checkboxes)):
             self.individual_obj_checkboxes[0].deleteLater()
@@ -154,7 +155,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.v_layout.addWidget(new_checkbox)
             self.individual_obj_checkboxes.append(new_checkbox)
 
-    def submit_button_action(self):
+    def submitButtonAction(self):
         if self.ui_obj.output_directory.text() != "":
             obj_for_export = []
             for each_checkbox in self.individual_obj_checkboxes:
@@ -177,12 +178,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui_obj.progress_bar,
                 self.ui_obj.progess_text)
 
-            self.exporting_thread.prog_update.connect(self.update_progress)
+            self.exporting_thread.prog_update.connect(self.updateProgress)
             self.exporting_thread.start()
         else:
             self.ui_obj.output_directory.setStyleSheet("background: red;")
 
-    def update_progress(self, recieved_dict):
+    def updateProgress(self, recieved_dict):
         self.ui_obj.progress_bar.setValue(
             int((recieved_dict["Job_Number"]/recieved_dict["Total_jobs"])*100))
 
@@ -191,7 +192,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.ui_obj.progess_text.setText("Complete!")
             # Open the directory we've just written the files to
-            self.open_file_in_explorer(recieved_dict["Last_file"])
+            self.openFileInExplorer(recieved_dict["Last_file"])
 
             # After X seconds close the dialog.
             countdown = 3
@@ -199,9 +200,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui_obj.progess_text.setText(f"Closing dialog in {i-1}")
                 QtWidgets.QApplication.processEvents()
                 sleep(1)
-            self.close_button_action()
+            self.closeButtonAction()
 
-    def browse_button_action(self, textbox_to_update):
+    def browseButtonAction(self, textbox_to_update):
         textbox_to_update.setStyleSheet("background: None;")
         # Get the directory location
         option = QtWidgets.QFileDialog.ShowDirsOnly
@@ -212,7 +213,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if filename:
             textbox_to_update.setText(filename)
 
-    def close_button_action(self):
+    def closeButtonAction(self):
         # Need to clear up the interface once a job is complete.
         self.ui_obj.output_directory.setText("")
         self.ui_obj.progress_bar.setValue(0)
@@ -222,7 +223,7 @@ class MainWindow(QtWidgets.QMainWindow):
             del self.individual_obj_checkboxes[0]
         dialog.close()
 
-    def open_file_in_explorer(self, file_path):
+    def openFileInExplorer(self, file_path):
         if current_system() == 'Windows':
             Popen(r'explorer /select,"' + f'{file_path}"')
         if current_system() == 'Darwin':
