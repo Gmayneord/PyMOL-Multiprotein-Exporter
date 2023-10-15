@@ -18,11 +18,17 @@ from time import sleep
 # =============================================================================
 # Parameters
 # =============================================================================
-surface_types = ["Surface", "Cartoon",
+SURFACE_TYPES = ["Surface", "Cartoon",
                  "Sticks", "Mesh",
                  "Lines", "Ribbon",
                  "Wire", "Licorice",
                  "Dots", "Spheres"]
+
+# After X seconds close the dialog.
+COUNTDOWN = 3
+
+Dialog = None
+
 
 # =============================================================================
 # PyMOL start-up
@@ -30,18 +36,16 @@ surface_types = ["Surface", "Cartoon",
 # Standard function for adding pymol plugin
 def __init_plugin__(app=None):
     from pymol.plugins import addmenuitemqt
-    addmenuitemqt("Multisubunit exporter", runPluginGUI)
-
-
-dialog = None
+    addmenuitemqt("Multiprotein Exporter", runPluginGUI)
 
 
 def runPluginGUI():
-    global dialog
-    if dialog is None:
-        main_app = MainWindow()
-        dialog = main_app.returnDialog()
-    dialog.show()
+    global Dialog
+    if Dialog is None:
+        Main_app = MainWindow()
+        Dialog = Main_app.returnDialog()
+    Dialog.show()
+
 
 # =============================================================================
 # Exporting function:
@@ -73,7 +77,7 @@ class ExportingThread(QtCore.QThread):
             obj_name = self.output_obj_list[obj_no].text()
             print(f"    -{obj_name}")
             # Send over the data to the progress bar to reflect updates
-            self.prog_update.emit({"Job_Number": obj_no+1,
+            self.prog_update.emit({"Job_Number": obj_no + 1,
                                    "Total_jobs": len(self.output_obj_list),
                                    "Object_name": obj_name})
 
@@ -95,46 +99,47 @@ class ExportingThread(QtCore.QThread):
         print('Complete')
         print('==============================================')
 
+
 # =============================================================================
-# GUI element:
+# GUI:
 # =============================================================================
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
         uifile = path.join(path.dirname(__file__), 'Main_menu.ui')
-        self.ui_obj = loadUi(uifile, dialog)
+        self.Gui = loadUi(uifile, Dialog)
         self.scroll_widget_area = QtWidgets.QWidget()
         self.v_layout = QtWidgets.QVBoxLayout()
         self.scroll_widget_area.setLayout(self.v_layout)
-        self.ui_obj.scrollArea.setWidget(self.scroll_widget_area)
+        self.Gui.scrollArea.setWidget(self.scroll_widget_area)
 
         self.individual_obj_checkboxes = []
         self.connectInterfaceButtons()
         self.populateObjAction()
 
     def connectInterfaceButtons(self):
-        self.ui_obj.refresh_button.clicked.connect(
+        self.Gui.refresh_button.clicked.connect(
             self.populateObjAction)
 
-        self.ui_obj.select_all.clicked.connect(
+        self.Gui.select_all.clicked.connect(
             lambda: self.selectAllAction(select_opt=True))
 
-        self.ui_obj.select_none.clicked.connect(
+        self.Gui.select_none.clicked.connect(
             lambda: self.selectAllAction(select_opt=False))
 
-        self.ui_obj.browse_button.clicked.connect(
-            lambda: self.browseButtonAction(self.ui_obj.output_directory))
+        self.Gui.browse_button.clicked.connect(
+            lambda: self.browseButtonAction(self.Gui.output_directory))
 
-        self.ui_obj.Submit_button.clicked.connect(self.submitButtonAction)
-        self.ui_obj.Cancel_button.clicked.connect(self.closeButtonAction)
-        self.populateExportsAction(self.ui_obj.export_type)
+        self.Gui.Submit_button.clicked.connect(self.submitButtonAction)
+        self.Gui.Cancel_button.clicked.connect(self.closeButtonAction)
+        self.populateExportsAction(self.Gui.export_type)
 
     def returnDialog(self):
         # Just returns the dialog for handling in PyMOL
-        return self.ui_obj
+        return self.Gui
 
     def populateExportsAction(self, dropdown_box_to_update):
-        for each_surface in surface_types:
+        for each_surface in SURFACE_TYPES:
             dropdown_box_to_update.addItem(each_surface)
 
     def selectAllAction(self, select_opt):
@@ -156,7 +161,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.individual_obj_checkboxes.append(new_checkbox)
 
     def submitButtonAction(self):
-        if self.ui_obj.output_directory.text() != "":
+        if self.Gui.output_directory.text() != "":
             obj_for_export = []
             for each_checkbox in self.individual_obj_checkboxes:
                 if each_checkbox.isChecked():
@@ -169,35 +174,33 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 print(' ')
                 print('==============================================')
-                print(f"{len(obj_for_export)} objects selected, exporting all to {self.ui_obj.output_directory.text()}")
+                print(f"{len(obj_for_export)} objects selected, exporting all to {self.Gui.output_directory.text()}")
                 print('==============================================')
-            self.exporting_thread = ExportingThread(
-                self.ui_obj.output_directory.text(),
-                self.ui_obj.export_type.currentText(),
+            self.Exporting_thread = ExportingThread(
+                self.Gui.output_directory.text(),
+                self.Gui.export_type.currentText(),
                 obj_for_export,
-                self.ui_obj.progress_bar,
-                self.ui_obj.progess_text)
+                self.Gui.progress_bar,
+                self.Gui.progess_text)
 
-            self.exporting_thread.prog_update.connect(self.updateProgress)
-            self.exporting_thread.start()
+            self.Exporting_thread.prog_update.connect(self.updateProgress)
+            self.Exporting_thread.start()
         else:
-            self.ui_obj.output_directory.setStyleSheet("background: red;")
+            self.Gui.output_directory.setStyleSheet("background: red;")
 
     def updateProgress(self, recieved_dict):
-        self.ui_obj.progress_bar.setValue(
-            int((recieved_dict["Job_Number"]/recieved_dict["Total_jobs"])*100))
+        progress_percent = int((recieved_dict["Job_Number"] / recieved_dict["Total_jobs"]) * 100)
+        self.Gui.progress_bar.setValue(progress_percent)
 
         if recieved_dict["Object_name"] is not None:
-            self.ui_obj.progess_text.setText(f"Exporting job {recieved_dict['Job_Number']} of {recieved_dict['Total_jobs']}: {recieved_dict['Object_name']}")
+            self.Gui.progess_text.setText(f"Exporting job {recieved_dict['Job_Number']} of {recieved_dict['Total_jobs']}: {recieved_dict['Object_name']}")
         else:
-            self.ui_obj.progess_text.setText("Complete!")
+            self.Gui.progess_text.setText("Complete!")
             # Open the directory we've just written the files to
             self.openFileInExplorer(recieved_dict["Last_file"])
 
-            # After X seconds close the dialog.
-            countdown = 3
-            for i in range(countdown, 0, -1):
-                self.ui_obj.progess_text.setText(f"Closing dialog in {i-1}")
+            for i in range(COUNTDOWN, 0, -1):
+                self.Gui.progess_text.setText(f"Closing dialog in {i-1}")
                 QtWidgets.QApplication.processEvents()
                 sleep(1)
             self.closeButtonAction()
@@ -207,21 +210,22 @@ class MainWindow(QtWidgets.QMainWindow):
         # Get the directory location
         option = QtWidgets.QFileDialog.ShowDirsOnly
         option |= QtWidgets.QFileDialog.DontUseNativeDialog
-        filename = str(QtWidgets.QFileDialog.getExistingDirectory(
-            dialog, "Select Directory for output", options=option))
+        filename = str(QtWidgets.QFileDialog.getExistingDirectory(self,
+                                                                  "Select Directory for output",
+                                                                  options=option))
 
         if filename:
             textbox_to_update.setText(filename)
 
     def closeButtonAction(self):
         # Need to clear up the interface once a job is complete.
-        self.ui_obj.output_directory.setText("")
-        self.ui_obj.progress_bar.setValue(0)
-        self.ui_obj.progess_text.setText("")
+        self.Gui.output_directory.setText("")
+        self.Gui.progress_bar.setValue(0)
+        self.Gui.progess_text.setText("")
         for i in range(len(self.individual_obj_checkboxes)):
             self.individual_obj_checkboxes[0].deleteLater()
             del self.individual_obj_checkboxes[0]
-        dialog.close()
+        self.Gui.close()
 
     def openFileInExplorer(self, file_path):
         if current_system() == 'Windows':
